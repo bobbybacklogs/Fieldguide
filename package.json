@@ -1,0 +1,62 @@
+{
+  "name": "fieldguide",
+  "version": "0.1.0",
+  "description": "CLI that crawls a project, reasons about it with ModelHitch, and writes README, feature map, agent instructions, and verify skills.",
+  "type": "module",
+  "bin": {
+    "fieldguide": "dist/cli.js"
+  },
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "LICENSE",
+    "README.md"
+  ],
+  "engines": {
+    "node": ">=18.18"
+  },
+  "scripts": {
+    "build": "tsc",
+    "lint": "tsc --noEmit",
+    "test": "tsx --test test/*.test.ts",
+    "verify": "npm run lint && npm run test && tsx scripts/verify-smoke.ts",
+    "prepublishOnly": "npm run build"
+  },
+  "keywords": [
+    "cli",
+    "documentation",
+    "readme",
+    "feature-map",
+    "agents",
+    "skills",
+    "verify"
+  ],
+  "author": "Bobby Backlogs <bobbybacklogs@gmail.com>",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/bobbybacklogs/Fieldguide.git"
+  },
+  "bugs": {
+    "url": "https://github.com/bobbybacklogs/Fieldguide/issues"
+  },
+  "homepage": "https://github.com/bobbybacklogs/Fieldguide#readme",
+  "dependencies": {
+    "commander": "^14.0.0",
+    "ignore": "^7.0.4",
+    "modelhitch": "^2.0.3",
+    "picocolors": "^1.1.1"
+  },
+  "devDependencies": {
+    "@types/node": "^22.15.3",
+    "tsx": "^4.20.5",
+    "typescript": "^5.8.3"
+  }
+}

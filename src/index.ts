@@ -1,0 +1,6 @@
+export { analyze, generateDocs, parseKinds, renderDoc, ALL_KINDS } from "./generate.js";
+export { inferProject, outputPathFor, skillRelPath } from "./infer.js";
+export { crawl } from "./crawl.js";
+export { createHitchChat, hitchConfigPath, textFromChatResult } from "./hitch.js";
+export { parseReasonedDocs, reasonDocs, slimInventory } from "./reason.js";
+export type { DocKind, GenerateOptions, ProjectModel, WriteResult } from "./types.js";
