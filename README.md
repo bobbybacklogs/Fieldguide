@@ -1,6 +1,6 @@
 # Fieldguide
 
-[![npm](https://img.shields.io/npm/v/fieldguide.svg)](https://www.npmjs.com/package/fieldguide)
+[![npm](https://img.shields.io/npm/v/@genoventures-labs/fieldguide.svg)](https://www.npmjs.com/package/@genoventures-labs/fieldguide)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![Node](https://img.shields.io/badge/node-%3E%3D18.18-brightgreen.svg)](package.json)
 [![CI](https://img.shields.io/github/actions/workflow/status/bobbybacklogs/Fieldguide/ci.yml?label=ci)](https://github.com/bobbybacklogs/Fieldguide/actions)
@@ -27,14 +27,14 @@ The Feature Map and verify skill follow the same contract as a hand-written pair
 ## Install
 
 ```bash
-npm install -g fieldguide
+npm install -g @genoventures-labs/fieldguide
 fieldguide
 ```
 
 Or once:
 
 ```bash
-npx fieldguide
+npx @genoventures-labs/fieldguide
 ```
 
 Node 18.18+ is required.

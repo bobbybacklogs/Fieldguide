@@ -1,6 +1,6 @@
 # Feature Map — Fieldguide
 
-Package name: **fieldguide**. Repo / folder: **Fieldguide**.
+Package name: **@genoventures-labs/fieldguide**. Repo / folder: **Fieldguide**.
 
 This map records what the product **actually does** today, what the default verify path **proves**, and what remains **env-gated or unfinished**. It is not a roadmap.
 
@@ -21,12 +21,12 @@ Default verify path: `npm run lint` → `npm run test` → `tsx scripts/verify-s
 
 | Surface | String |
 | --- | --- |
-| npm package | fieldguide |
+| npm package | @genoventures-labs/fieldguide |
 | CLI bin | fieldguide |
 | Folder | Fieldguide |
 | README title | Fieldguide |
 
-The map uses **Fieldguide** as the product name and **fieldguide** as the CLI/package name.
+The map uses **Fieldguide** as the product name, **fieldguide** as the CLI bin, and **@genoventures-labs/fieldguide** as the npm package.
 
 ---
 
@@ -44,7 +44,7 @@ The map uses **Fieldguide** as the product name and **fieldguide** as the CLI/pa
 
 **Must still do / do not claim**
 
-- That `npx fieldguide` was executed against this repo as part of default verify (tests call the library API).
+- That `npx @genoventures-labs/fieldguide` was executed against this repo as part of default verify (tests call the library API).
 - That the compiled `dist/cli.js` bin was spawned.
 
 ---
@@ -111,7 +111,7 @@ Do **not** treat README copy as implemented unless a row above says so:
 - LLM / agent “understanding” without ModelHitch — **not the default path**; `--no-llm` is inventory templates only.
 - A live Ollama / LM Studio / hosted ModelHitch lane during `npm run verify` — **not called**.
 - Executing the target project's servers, tests, or vendor APIs — **not present**.
-- npm publish of `fieldguide` — **unverified**.
+- npm publish of `@genoventures-labs/fieldguide` — **unverified**.
 - Live GitHub Actions on `bobbybacklogs/Fieldguide` — **code exists**; **unverified (env-gated)**.
 - Overwriting handmade READMEs by default — **not shipped** (skip unless `--force` / marker).
 - Python/Go/Rust deep feature maps beyond manifest + extension hints — **shallow / code-inspected**.

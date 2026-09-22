@@ -53,7 +53,7 @@ If `node_modules` is missing: `npm install` (this repo expects a `package-lock.j
 
 These Feature Map rows stay **Unverified (env-gated)** or **Gap** after a green `npm run verify`. Do not “fix” the map by claiming them.
 
-- Publishing `fieldguide` to npm.
+- Publishing `@genoventures-labs/fieldguide` to npm.
 - GitHub Actions actually running on `main` from this machine.
 - A live ModelHitch lane (Ollama, LM Studio, gateway) during `npm run verify`.
 - Executing a *target* project's tests, servers, or live vendor APIs.

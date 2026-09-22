@@ -4,7 +4,7 @@ Instructions for coding agents working in this repository.
 
 ## Product
 
-**Fieldguide** (`fieldguide`) is a Node/TypeScript CLI. It crawls a directory, infers a project model, reasons over that inventory with **ModelHitch**, and writes current-state documentation: `README.md`, `docs/FEATURE_MAP.md`, `AGENT.md`, and `.agents/skills/verify-<slug>/SKILL.md`.
+**Fieldguide** (`@genoventures-labs/fieldguide`, bin `fieldguide`) is a Node/TypeScript CLI. It crawls a directory, infers a project model, reasons over that inventory with **ModelHitch**, and writes current-state documentation: `README.md`, `docs/FEATURE_MAP.md`, `AGENT.md`, and `.agents/skills/verify-<slug>/SKILL.md`.
 
 This file is **current-state**. Do not claim Fieldguide executes the target app. Do not claim default verify calls a live model. Do not claim handmade READMEs are overwritten without `--force`.
 
