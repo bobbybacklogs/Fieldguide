@@ -3,7 +3,7 @@ import type { HitchChat } from "./hitch.js";
 import type { DocKind, ProjectModel } from "./types.js";
 import { GENERATED_BANNER, README_MARKER } from "./types.js";
 
-const EXCERPT_BUDGET = 36_000;
+const EXCERPT_BUDGET = 24_000;
 const PRIORITY_FILES = [
   "package.json",
   "metadata.json",
@@ -29,6 +29,7 @@ export class ReasonParseError extends Error {
 export interface ReasonedDocs {
   reasoning: string;
   docs: Partial<Record<DocKind, string>>;
+  sourced?: Partial<Record<DocKind, "model" | "template">>;
 }
 
 export function slimInventory(model: ProjectModel): Record<string, unknown> {
@@ -37,25 +38,52 @@ export function slimInventory(model: ProjectModel): Record<string, unknown> {
     slug: model.slug,
     packageName: model.packageName,
     description: model.description,
-    version: model.version,
-    license: model.license,
-    github: model.github,
-    binNames: model.binNames,
-    packageManager: model.packageManager,
     scripts: model.scripts,
-    stack: model.stack,
-    treeTop: model.treeTop,
-    sourceFiles: model.sourceFiles.slice(0, 80),
+    stack: model.stack.map((layer) => layer.label),
     routes: model.routes,
-    envHits: model.envHits,
-    integrations: model.integrations,
-    naming: model.naming,
-    defaultVerify: model.defaultVerify,
-    sections: model.sections,
-    hasTests: model.hasTests,
-    testFiles: model.testFiles.slice(0, 20),
-    ciFiles: model.ciFiles,
+    envHits: model.envHits.map((hit) => hit.key),
+    defaultVerify: model.defaultVerify.command,
   };
+}
+
+export function formatInventoryMarkdown(model: ProjectModel): string {
+  const scripts = Object.entries(model.scripts)
+    .slice(0, 12)
+    .map(([name, command]) => `- ${name}: ${command}`)
+    .join("\n");
+  const routes = model.routes
+    .slice(0, 20)
+    .map((route) => `- ${route.method} ${route.path} (${route.file})`)
+    .join("\n");
+  const env = model.envHits
+    .slice(0, 20)
+    .map((hit) => `- ${hit.key}${hit.inExample ? " (in .env.example)" : ""}`)
+    .join("\n");
+  const stack = model.stack.map((layer) => layer.label).join(", ") || "unknown";
+  return [
+    `Project: ${model.displayName}`,
+    `Package: ${model.packageName ?? "none"}`,
+    `Slug: ${model.slug}`,
+    `Description: ${model.description}`,
+    `License: ${model.license ?? "unknown"}`,
+    `Bin: ${model.binNames.join(", ") || "none"}`,
+    `Stack: ${stack}`,
+    `Verify: ${model.defaultVerify.command ?? "none"}`,
+    `Layout: ${model.treeTop.join(", ")}`,
+    "",
+    "Scripts:",
+    scripts || "- none",
+    "",
+    "HTTP routes in source:",
+    routes || "- none",
+    "",
+    "Env keys:",
+    env || "- none",
+    "",
+    "Integrations:",
+    model.integrations.map((item) => `- ${item.label} [${item.grade}] ${item.evidence.join("; ")}`).join("\n") ||
+      "- none",
+  ].join("\n");
 }
 
 export function sourceExcerpts(sources: CrawlResult["sources"]): string {
@@ -70,64 +98,13 @@ export function sourceExcerpts(sources: CrawlResult["sources"]): string {
   for (const rel of ordered) {
     const body = sources.get(rel);
     if (!body) continue;
-    const slice = body.length > 6_000 ? `${body.slice(0, 6_000)}\n/* … truncated … */` : body;
+    const slice = body.length > 4_000 ? `${body.slice(0, 4_000)}\n/* truncated */` : body;
     if (used + slice.length > EXCERPT_BUDGET) break;
-    chunks.push(`--- ${rel} ---\n${slice}`);
+    chunks.push(`FILE ${rel}\n${slice}`);
     used += slice.length;
   }
   return chunks.join("\n\n");
 }
-
-export function buildReasonPrompt(model: ProjectModel, excerpts: string): string {
-  return `Inventory (ground truth — do not invent files, routes, scripts, or env keys that are not here):
-
-${JSON.stringify(slimInventory(model), null, 2)}
-
-Source excerpts:
-
-${excerpts || "(no product source excerpts)"}
-
-Write the four documents now using the marker format from the system instructions.`;
-}
-
-export const SYSTEM_PROMPT = `You are Fieldguide. You write CURRENT-STATE documentation for a software checkout.
-
-The inventory JSON is the fact base. Source excerpts are supporting evidence. Do not invent features, routes, scripts, or vendor integrations that are not in the inventory or excerpts. Copy is not proof. Unused helpers are gaps.
-
-Write four Markdown documents:
-
-1. README — professional product README with badges if package/license/github exist, quick start from real scripts, honest feature list, layout, license. First line MUST be exactly: <!-- fieldguide:readme -->
-2. MAP — Feature Map titled "Feature Map — {displayName}". Include the evidence-grade table (Proven (verify), Code-inspected, Unverified (env-gated), Gap), naming table, sections with claim/grade/evidence tables, explicit out-of-scope. Not a roadmap.
-3. AGENT — AGENT.md for coding agents: product, docs of record (docs/FEATURE_MAP.md and the verify skill path), default verify command, layout, do-not-claim, how to update the map when behavior drifts.
-4. SKILL — YAML frontmatter with name: verify-{slug} and a description. Default no-secrets verify command. Stage table. Smoke coverage mapped to Feature Map rows. Out of default scope. Failure handling. Cleanup. Link the map as ../../../docs/FEATURE_MAP.md.
-
-Reply with this exact marker format (plain text, not JSON, not a single code fence wrapping everything):
-
-<<<REASONING>>>
-one short paragraph of what the repo actually is
-<<<README>>>
-markdown
-<<<MAP>>>
-markdown
-<<<AGENT>>>
-markdown
-<<<SKILL>>>
-markdown
-
-Do not omit markers. Do not put the documents inside a JSON object.`;
-
-const RETRY_PROMPT = `Your previous reply could not be parsed. Reply again with ONLY this marker format and no JSON:
-
-<<<REASONING>>>
-...
-<<<README>>>
-...
-<<<MAP>>>
-...
-<<<AGENT>>>
-...
-<<<SKILL>>>
-...`;
 
 export function parseReasonedDocs(raw: string): ReasonedDocs {
   const delimited = parseDelimited(raw);
@@ -136,10 +113,7 @@ export function parseReasonedDocs(raw: string): ReasonedDocs {
   const fromJson = parseJsonDocs(raw);
   if (fromJson) return finish(fromJson);
 
-  throw new ReasonParseError(
-    "ModelHitch reply was not parseable as Fieldguide markers or JSON.",
-    snippet(raw),
-  );
+  throw new ReasonParseError("Reply was not a complete Fieldguide document set.", snippet(raw));
 }
 
 export async function reasonDocs(
@@ -147,30 +121,78 @@ export async function reasonDocs(
   sources: CrawlResult["sources"],
   hitch: HitchChat,
 ): Promise<ReasonedDocs> {
-  const user = buildReasonPrompt(model, sourceExcerpts(sources));
-  const firstMessages = [
-    { role: "system" as const, content: SYSTEM_PROMPT },
-    { role: "user" as const, content: user },
-  ];
-  const first = await hitch.complete(firstMessages);
+  const inventory = formatInventoryMarkdown(model);
+  const excerpts = sourceExcerpts(sources);
+  const context = `${inventory}\n\nSource excerpts:\n${excerpts || "(none)"}`;
+
+  let combined: ReasonedDocs | null = null;
+  const first = await hitch.complete([
+    { role: "system", content: COMBINED_SYSTEM },
+    { role: "user", content: `${context}\n\nWrite all four documents using the <<<README>>> markers.` },
+  ]);
   try {
-    return parseReasonedDocs(first);
-  } catch (error) {
-    const second = await hitch.complete([
-      ...firstMessages,
-      { role: "assistant", content: first },
-      { role: "user", content: RETRY_PROMPT },
-    ]);
-    try {
-      return parseReasonedDocs(second);
-    } catch {
-      const preview = error instanceof ReasonParseError ? error.preview : snippet(first);
-      throw new ReasonParseError(
-        "ModelHitch did not return parseable docs after a retry. Try a stronger model, or pass --no-llm for inventory templates.",
-        preview,
-      );
+    combined = parseReasonedDocs(first);
+  } catch {
+    combined = null;
+  }
+
+  const docs: Partial<Record<DocKind, string>> = { ...combined?.docs };
+  const sourced: NonNullable<ReasonedDocs["sourced"]> = {};
+  for (const kind of DOC_KINDS) {
+    if (docs[kind]) sourced[kind] = "model";
+  }
+
+  let reasoning = combined?.reasoning?.trim() ?? "";
+  if (!reasoning) {
+    reasoning = await oneShot(
+      hitch,
+      "Write one short paragraph stating what this repository actually is today. Plain prose. No markdown headings. No JSON.",
+      context,
+    );
+  }
+
+  for (const kind of DOC_KINDS) {
+    if (docs[kind]) continue;
+    const drafted = await oneShot(hitch, docInstruction(kind, model), context);
+    const extracted = extractMarkdownDocument(drafted, kind, model.slug);
+    if (extracted) {
+      docs[kind] = normalizeDoc(kind, extracted, model.slug);
+      sourced[kind] = "model";
     }
   }
+
+  return { reasoning: reasoning.trim(), docs, sourced };
+}
+
+export function extractMarkdownDocument(raw: string, kind: DocKind, slug: string): string | null {
+  let text = raw.trim();
+  if (!text) return null;
+
+  const fenced = text.match(/```(?:markdown|md)?\s*([\s\S]*?)```/i);
+  if (fenced?.[1] && !text.includes("```json")) {
+    text = fenced[1].trim();
+  }
+
+  if (text.startsWith("{") || text.includes('"readme"') || text.includes('"map"')) {
+    const parsed = parseJsonDocs(text);
+    const fromKind = parsed?.docs[kind];
+    if (fromKind) text = fromKind;
+  }
+
+  const marked = section(text, markerName(kind));
+  if (marked) text = marked;
+
+  const start = text.search(/^(#{1,3} |---)/m);
+  if (start > 0 && start < 600) text = text.slice(start).trim();
+
+  text = text.trim();
+  if (kind === "skill") text = ensureSkillFrontmatter(text, slug);
+  if (kind === "map" && !/Feature Map/i.test(text) && /^#/m.test(text)) {
+    text = `# Feature Map — project\n\n${text}`;
+  }
+  const looksLikeDoc = /^(#|---)/m.test(text) || /Feature Map/i.test(text);
+  if (!looksLikeDoc) return null;
+  return text;
 }
 
 export function bodyForKind(kind: DocKind, reasoned: ReasonedDocs | null, fallback: string): string {
@@ -188,8 +210,70 @@ export function bodyForKind(kind: DocKind, reasoned: ReasonedDocs | null, fallba
   }
 }
 
+const COMBINED_SYSTEM = `You write current-state project documentation.
+
+Rules:
+- Do not invent files, routes, scripts, or integrations.
+- Output Markdown documents, never a JSON object.
+- Use these markers, each once:
+
+<<<REASONING>>>
+short paragraph
+<<<README>>>
+markdown
+<<<MAP>>>
+markdown
+<<<AGENT>>>
+markdown
+<<<SKILL>>>
+markdown`;
+
+async function oneShot(hitch: HitchChat, instruction: string, context: string): Promise<string> {
+  return hitch.complete([
+    {
+      role: "system",
+      content:
+        "You write a single Markdown document. Output only Markdown (or a short prose paragraph when asked). Never wrap the answer in a JSON object. Never preface with Sure or Here is.",
+    },
+    { role: "user", content: `${context}\n\n${instruction}` },
+  ]);
+}
+
+function docInstruction(kind: DocKind, model: ProjectModel): string {
+  switch (kind) {
+    case "readme":
+      return `Write README.md for ${model.displayName}. First line: <!-- fieldguide:readme -->. Include purpose, install, commands from the inventory, layout, license. Markdown only.`;
+    case "map":
+      return `Write docs/FEATURE_MAP.md for ${model.displayName}. Title must include "Feature Map". Include evidence-grade table (Proven (verify), Code-inspected, Unverified (env-gated), Gap), naming, honest claims, out of scope. Markdown only.`;
+    case "agent":
+      return `Write AGENT.md for coding agents working on ${model.displayName}. Include docs of record, default verify command, layout, do-not-claim. Markdown only.`;
+    case "skill":
+      return `Write a verify skill. Start with YAML frontmatter:\n---\nname: verify-${model.slug}\ndescription: use this when verifying ${model.displayName} still matches its Feature Map\n---\nThen default no-secrets command, stage table, failure handling. Link ../../../docs/FEATURE_MAP.md. Markdown only.`;
+    default: {
+      const _never: never = kind;
+      return _never;
+    }
+  }
+}
+
+function markerName(kind: DocKind): string {
+  switch (kind) {
+    case "readme":
+      return "README";
+    case "map":
+      return "MAP";
+    case "agent":
+      return "AGENT";
+    case "skill":
+      return "SKILL";
+    default: {
+      const _never: never = kind;
+      return _never;
+    }
+  }
+}
+
 function parseDelimited(raw: string): ReasonedDocs | null {
-  const reasoning = section(raw, "REASONING");
   const docs: Partial<Record<DocKind, string>> = {
     readme: section(raw, "README"),
     map: section(raw, "MAP"),
@@ -197,7 +281,7 @@ function parseDelimited(raw: string): ReasonedDocs | null {
     skill: section(raw, "SKILL"),
   };
   if (!docs.readme || !docs.map || !docs.agent || !docs.skill) return null;
-  return { reasoning: reasoning ?? "", docs };
+  return { reasoning: section(raw, "REASONING") ?? "", docs };
 }
 
 function section(raw: string, name: string): string | undefined {
@@ -239,21 +323,15 @@ function finish(parsed: ReasonedDocs): ReasonedDocs {
   const docs: Partial<Record<DocKind, string>> = {};
   for (const kind of DOC_KINDS) {
     const value = parsed.docs[kind];
-    if (value) docs[kind] = normalizeDoc(kind, value);
+    if (value) docs[kind] = normalizeDoc(kind, value, "project");
   }
   if (!docs.map || !docs.agent || !docs.skill || !docs.readme) {
     throw new ReasonParseError("Parsed docs are missing readme, map, agent, or skill.", "");
   }
-  if (!docs.skill.includes("name: verify-")) {
-    throw new ReasonParseError("Skill is missing YAML name: verify-<slug>.", snippet(docs.skill));
-  }
-  if (!docs.map.includes("Feature Map")) {
-    throw new ReasonParseError("Map is missing a Feature Map heading.", snippet(docs.map));
-  }
   return { reasoning: parsed.reasoning, docs };
 }
 
-function normalizeDoc(kind: DocKind, value: string): string {
+function normalizeDoc(kind: DocKind, value: string, slug: string): string {
   let text = value.trim();
   if (text.startsWith("```") && text.endsWith("```")) {
     text = text.replace(/^```[a-z]*\n?/i, "").replace(/\n?```$/, "").trim();
@@ -265,14 +343,20 @@ function normalizeDoc(kind: DocKind, value: string): string {
     case "map":
       if (!text.includes("Generated by Fieldguide")) text = `${GENERATED_BANNER}\n\n${text}`;
       return text;
-    case "agent":
     case "skill":
+      return ensureSkillFrontmatter(text, slug);
+    case "agent":
       return text;
     default: {
       const _never: never = kind;
       return _never;
     }
   }
+}
+
+function ensureSkillFrontmatter(text: string, slug: string): string {
+  if (/^---[\s\S]*name:\s*verify-/.test(text)) return text;
+  return `---\nname: verify-${slug}\ndescription: "use this when verifying the project still matches its Feature Map"\n---\n\n${text}`;
 }
 
 function snippet(raw: string): string {

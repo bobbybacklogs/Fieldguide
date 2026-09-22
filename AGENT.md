@@ -31,7 +31,7 @@ This is `npm run lint && npm run test && tsx scripts/verify-smoke.ts`.
 - `src/crawl.ts` — gitignore-aware walk + capped source reads.
 - `src/infer.ts` — stack, routes, env, integrations, verify plan, feature sections.
 - `src/hitch.ts` — ModelHitch client (config, local providers, mock). Does not force JSON mode; local models often ignore it.
-- `src/reason.ts` — marker prompt (`<<<README>>>` …), JSON fallback, one retry.
+- `src/reason.ts` — markdown inventory (not JSON), combined markers, then one file per hitch call; templates fill gaps.
 - `src/report.ts` — boxed CLI tables.
 - `src/generate.ts` — render + write orchestration.
 - `src/docs-readme-agent.ts` / `src/docs-map-skill.ts` — inventory templates (`--no-llm`).

@@ -1,6 +1,6 @@
 {
   "name": "@genoventures-labs/fieldguide",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "CLI that crawls a project, reasons about it with ModelHitch, and writes README, feature map, agent instructions, and verify skills.",
   "type": "module",
   "publishConfig": {

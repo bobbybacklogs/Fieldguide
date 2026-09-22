@@ -64,6 +64,7 @@ export async function generateDocs(options: GenerateOptions): Promise<{
   for (const kind of options.kinds) {
     const rel = outputPathFor(kind, model);
     const abs = join(options.root, rel);
+    const fromModel = Boolean(reasoned?.docs[kind]);
     const body = bodyForKind(kind, reasoned, renderDoc(kind, model));
 
     if (kind === "readme") {
@@ -76,13 +77,25 @@ export async function generateDocs(options: GenerateOptions): Promise<{
     }
 
     if (options.dryRun) {
-      results.push({ kind, rel, status: "dry-run", body });
+      results.push({
+        kind,
+        rel,
+        status: "dry-run",
+        body,
+        reason: fromModel ? "reasoned" : "inventory template",
+      });
       continue;
     }
 
     await mkdir(dirname(abs), { recursive: true });
     await writeFile(abs, `${body.trim()}\n`, "utf8");
-    results.push({ kind, rel, status: "wrote", body });
+    results.push({
+      kind,
+      rel,
+      status: "wrote",
+      body,
+      reason: fromModel ? "reasoned" : "inventory template",
+    });
   }
 
   return { model, results, reasoning: reasoned?.reasoning, lane };

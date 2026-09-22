@@ -5,7 +5,7 @@ import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { generateDocs } from "../src/generate.js";
 import { createHitchChat } from "../src/hitch.js";
-import { parseReasonedDocs, slimInventory } from "../src/reason.js";
+import { extractMarkdownDocument, parseReasonedDocs, slimInventory } from "../src/reason.js";
 import { analyze } from "../src/generate.js";
 
 const SAMPLE_JSON = JSON.stringify({
@@ -64,13 +64,12 @@ describe("parseReasonedDocs", () => {
     assert.match(parsed.docs.skill ?? "", /name: verify-harbor-desk/);
   });
 
-  it("rejects missing skill frontmatter", () => {
+  it("rejects incomplete JSON sets", () => {
     const bad = JSON.stringify({
       reasoning: "x",
       readme: "# R",
       map: "# Feature Map — X",
       agent: "# AGENT",
-      skill: "# no yaml",
     });
     assert.throws(() => parseReasonedDocs(bad));
   });
@@ -107,12 +106,12 @@ describe("ModelHitch reason path", () => {
     }
   });
 
-  it("retries when the first hitch reply is prose", async () => {
+  it("falls back to per-document markdown when the first reply is prose", async () => {
     const root = await mkdtemp(join(tmpdir(), "fieldguide-retry-"));
     try {
       await writeFile(join(root, "package.json"), JSON.stringify({ name: "harbor-desk" }));
       let calls = 0;
-      const { reasoning } = await generateDocs({
+      const { results } = await generateDocs({
         root,
         dryRun: false,
         force: true,
@@ -123,12 +122,13 @@ describe("ModelHitch reason path", () => {
           complete: async () => {
             calls += 1;
             if (calls === 1) return "Sure — I'll draft a README in a moment.";
-            return SAMPLE_MARKERS;
+            return "# Harbor Desk\n\nA tiny Express desk that lists tides.\n";
           },
         },
       });
-      assert.equal(calls, 2);
-      assert.match(reasoning ?? "", /Express tide API/);
+      assert.ok(calls >= 2);
+      const readme = results.find((item) => item.kind === "readme");
+      assert.equal(readme?.reason, "reasoned");
     } finally {
       await rm(root, { recursive: true, force: true });
     }
@@ -138,6 +138,41 @@ describe("ModelHitch reason path", () => {
     const hitch = await createHitchChat({ mock: true });
     const text = await hitch.complete([{ role: "user", content: "Clock in." }]);
     assert.match(text, /Clock in/);
+  });
+});
+
+describe("extractMarkdownDocument", () => {
+  it("strips a Sure preamble", () => {
+    const text = extractMarkdownDocument(
+      "Sure, here you go.\n\n# Harbor Desk\n\nTides.",
+      "readme",
+      "harbor-desk",
+    );
+    assert.match(text ?? "", /^# Harbor Desk/m);
+  });
+
+  it("never fails the run when hitch returns unusable JSON", async () => {
+    const root = await mkdtemp(join(tmpdir(), "fieldguide-jsonjunk-"));
+    try {
+      await writeFile(join(root, "package.json"), JSON.stringify({ name: "harbor-desk", description: "tides" }));
+      const { results } = await generateDocs({
+        root,
+        dryRun: false,
+        force: true,
+        kinds: ["readme", "map"],
+        llm: true,
+        chat: {
+          lane: { provider: "mock", model: "mock-model" },
+          complete: async () => "{ this is not json and has no markers",
+        },
+      });
+      assert.equal(results.length, 2);
+      assert.ok(results.every((item) => item.status === "wrote"));
+      const readme = await readFile(join(root, "README.md"), "utf8");
+      assert.match(readme, /Harbor Desk|fieldguide:readme/);
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
   });
 });
 
@@ -155,3 +190,4 @@ describe("slimInventory", () => {
     }
   });
 });
+
