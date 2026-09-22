@@ -122,6 +122,7 @@ export interface GenerateOptions {
   provider?: string;
   model?: string;
   chat?: HitchChat;
+  onProgress?: (event: { step: "crawl" | "infer" | "reason" | "write"; detail?: string }) => void;
 }
 
 export interface WriteResult {

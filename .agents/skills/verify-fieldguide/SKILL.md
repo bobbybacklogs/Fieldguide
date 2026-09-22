@@ -45,7 +45,8 @@ If `node_modules` is missing: `npm install` (this repo expects a `package-lock.j
 | Skill YAML `name: verify-<slug>` and relative Feature Map link | Skill contract. | Verify skill |
 | Fixture Express routes `/api/health` and env `TIDE_API_KEY` appear in the map | Source inference. | Crawl / infer |
 | Markdown mentioning `initializeApp` does not invent a Firebase integration | Product-source filtering. | Crawl / infer |
-| Injected ModelHitch JSON writes reasoned README/map | Reason path without a live lane. | ModelHitch |
+| Injected ModelHitch JSON or `<<<MARKER>>>` docs write reasoned README/map | Reason path without a live lane. | ModelHitch |
+| Prose first reply is retried once | Marker retry. | ModelHitch |
 | `createHitchChat({ mock: true })` echoes without a key | Mock provider. | ModelHitch |
 | Typecheck + tests succeed without secret env | Health. | Health / runtime |
 

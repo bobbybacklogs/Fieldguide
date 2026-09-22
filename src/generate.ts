@@ -37,7 +37,9 @@ export async function generateDocs(options: GenerateOptions): Promise<{
   reasoning?: string;
   lane?: { provider: string; model: string };
 }> {
+  options.onProgress?.({ step: "crawl" });
   const crawled = await crawl(options.root);
+  options.onProgress?.({ step: "infer", detail: `${crawled.files.length} files` });
   const model = inferProject(options.root, crawled);
   const useLlm = options.llm !== false;
   let reasoned: ReasonedDocs | null = null;
@@ -51,8 +53,11 @@ export async function generateDocs(options: GenerateOptions): Promise<{
         model: options.model,
       }));
     lane = hitch.lane;
+    options.onProgress?.({ step: "reason", detail: `${lane.provider} / ${lane.model}` });
     reasoned = await reasonDocs(model, crawled.sources, hitch);
   }
+
+  options.onProgress?.({ step: "write", detail: `${options.kinds.length} docs` });
 
   const results: WriteResult[] = [];
 

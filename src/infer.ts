@@ -322,7 +322,7 @@ function inferIntegrations(
 ): Integration[] {
   const found: Integration[] = [];
   const haystack = [...sources.entries()]
-    .filter(([file]) => isProductSource(file))
+    .filter(([file]) => isProductSource(file) && file !== "src/infer.ts")
     .map(([, text]) => text)
     .join("\n");
   for (const spec of INTEGRATIONS) {

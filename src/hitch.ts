@@ -30,11 +30,18 @@ export function hitchConfigPath(): string {
 
 export function textFromChatResult(result: ChatResult): string {
   const content = result.message.content;
-  if (typeof content === "string") return content;
-  return content
-    .filter((part) => part.type === "text")
-    .map((part) => part.text)
-    .join("");
+  const fromParts =
+    typeof content === "string"
+      ? content
+      : content
+          .filter((part) => part.type === "text")
+          .map((part) => part.text)
+          .join("");
+  if (fromParts.trim()) return fromParts;
+  if (result.message.role === "assistant" && result.message.reasoningContent) {
+    return result.message.reasoningContent;
+  }
+  return fromParts;
 }
 
 export async function createHitchChat(options: {
@@ -84,9 +91,8 @@ function wrap(mh: ModelHitch, lane: HitchLane): HitchChat {
           provider: lane.provider,
           model: lane.model,
           messages,
-          temperature: 0.2,
+          temperature: 0.15,
           maxTokens: 8192,
-          responseFormat: LOCAL_PROVIDERS.has(lane.provider) ? "json" : { type: "json_object" },
         });
         const text = textFromChatResult(result).trim();
         if (!text) {

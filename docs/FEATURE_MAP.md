@@ -82,7 +82,8 @@ The map uses **Fieldguide** as the product name, **fieldguide** as the CLI bin, 
 | Claim | Grade | Evidence |
 | --- | --- | --- |
 | Writes reasoned `README.md` / map / agent / skill from ModelHitch JSON (`readme`, `map`, `agent`, `skill` + `reasoning`). | Proven (verify) | `test/reason.test.ts` injects a hitch `complete` that returns fixture JSON. |
-| `parseReasonedDocs` requires Feature Map heading and `name: verify-` skill YAML; stamps README marker. | Proven (verify) | `test/reason.test.ts`. |
+| `parseReasonedDocs` accepts `<<<README>>>` markers (preferred) or JSON; missing skill YAML fails. | Proven (verify) | `test/reason.test.ts`. |
+| A prose first reply is retried with a marker-only prompt. | Proven (verify) | `test/reason.test.ts` two-call hitch stub. |
 | `--no-llm` / `llm: false` still writes the four artifacts from inventory templates. | Proven (verify) | generate tests + smoke. |
 | Skill links the Feature Map as `../../../docs/FEATURE_MAP.md`. | Proven (verify) | Smoke. |
 | Regenerates map / agent / skill on every write run (no handmade-skip). | Code-inspected | `generateDocs` only special-cases README. |

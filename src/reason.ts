@@ -3,7 +3,7 @@ import type { HitchChat } from "./hitch.js";
 import type { DocKind, ProjectModel } from "./types.js";
 import { GENERATED_BANNER, README_MARKER } from "./types.js";
 
-const EXCERPT_BUDGET = 48_000;
+const EXCERPT_BUDGET = 36_000;
 const PRIORITY_FILES = [
   "package.json",
   "metadata.json",
@@ -14,6 +14,17 @@ const PRIORITY_FILES = [
   "src/server.ts",
   ".env.example",
 ];
+
+const DOC_KINDS: DocKind[] = ["readme", "map", "agent", "skill"];
+
+export class ReasonParseError extends Error {
+  readonly preview: string;
+  constructor(message: string, preview: string) {
+    super(message);
+    this.name = "ReasonParseError";
+    this.preview = preview;
+  }
+}
 
 export interface ReasonedDocs {
   reasoning: string;
@@ -59,7 +70,7 @@ export function sourceExcerpts(sources: CrawlResult["sources"]): string {
   for (const rel of ordered) {
     const body = sources.get(rel);
     if (!body) continue;
-    const slice = body.length > 8_000 ? `${body.slice(0, 8_000)}\n/* … truncated … */` : body;
+    const slice = body.length > 6_000 ? `${body.slice(0, 6_000)}\n/* … truncated … */` : body;
     if (used + slice.length > EXCERPT_BUDGET) break;
     chunks.push(`--- ${rel} ---\n${slice}`);
     used += slice.length;
@@ -74,7 +85,9 @@ ${JSON.stringify(slimInventory(model), null, 2)}
 
 Source excerpts:
 
-${excerpts || "(no product source excerpts)"}`;
+${excerpts || "(no product source excerpts)"}
+
+Write the four documents now using the marker format from the system instructions.`;
 }
 
 export const SYSTEM_PROMPT = `You are Fieldguide. You write CURRENT-STATE documentation for a software checkout.
@@ -83,37 +96,50 @@ The inventory JSON is the fact base. Source excerpts are supporting evidence. Do
 
 Write four Markdown documents:
 
-1. readme — professional product README with badges if package/license/github exist, quick start from real scripts, honest feature list, layout, license. First line MUST be exactly: <!-- fieldguide:readme -->
-2. map — Feature Map titled "Feature Map — {displayName}". Include the evidence-grade table (Proven (verify), Code-inspected, Unverified (env-gated), Gap), naming table, sections with claim/grade/evidence tables, explicit out-of-scope. Not a roadmap.
-3. agent — AGENT.md for coding agents: product, docs of record (docs/FEATURE_MAP.md and the verify skill path), default verify command, layout, do-not-claim, how to update the map when behavior drifts.
-4. skill — YAML frontmatter with name: verify-{slug} and a description. Default no-secrets verify command. Stage table. Smoke coverage mapped to Feature Map rows. Out of default scope. Failure handling. Cleanup. Link the map as ../../../docs/FEATURE_MAP.md.
+1. README — professional product README with badges if package/license/github exist, quick start from real scripts, honest feature list, layout, license. First line MUST be exactly: <!-- fieldguide:readme -->
+2. MAP — Feature Map titled "Feature Map — {displayName}". Include the evidence-grade table (Proven (verify), Code-inspected, Unverified (env-gated), Gap), naming table, sections with claim/grade/evidence tables, explicit out-of-scope. Not a roadmap.
+3. AGENT — AGENT.md for coding agents: product, docs of record (docs/FEATURE_MAP.md and the verify skill path), default verify command, layout, do-not-claim, how to update the map when behavior drifts.
+4. SKILL — YAML frontmatter with name: verify-{slug} and a description. Default no-secrets verify command. Stage table. Smoke coverage mapped to Feature Map rows. Out of default scope. Failure handling. Cleanup. Link the map as ../../../docs/FEATURE_MAP.md.
 
-Return JSON only:
-{"reasoning":"short chain of what the repo actually is","readme":"...","map":"...","agent":"...","skill":"..."}
+Reply with this exact marker format (plain text, not JSON, not a single code fence wrapping everything):
 
-reasoning is for yourself; the four docs are what get written.`;
+<<<REASONING>>>
+one short paragraph of what the repo actually is
+<<<README>>>
+markdown
+<<<MAP>>>
+markdown
+<<<AGENT>>>
+markdown
+<<<SKILL>>>
+markdown
+
+Do not omit markers. Do not put the documents inside a JSON object.`;
+
+const RETRY_PROMPT = `Your previous reply could not be parsed. Reply again with ONLY this marker format and no JSON:
+
+<<<REASONING>>>
+...
+<<<README>>>
+...
+<<<MAP>>>
+...
+<<<AGENT>>>
+...
+<<<SKILL>>>
+...`;
 
 export function parseReasonedDocs(raw: string): ReasonedDocs {
-  const json = extractJsonObject(raw);
-  const parsed = JSON.parse(json) as Record<string, unknown>;
-  const reasoning = typeof parsed.reasoning === "string" ? parsed.reasoning.trim() : "";
-  const docs: Partial<Record<DocKind, string>> = {};
-  for (const kind of ["readme", "map", "agent", "skill"] as const) {
-    const value = parsed[kind];
-    if (typeof value === "string" && value.trim()) {
-      docs[kind] = normalizeDoc(kind, value);
-    }
-  }
-  if (!docs.map || !docs.agent || !docs.skill || !docs.readme) {
-    throw new Error("ModelHitch JSON is missing one of readme, map, agent, skill.");
-  }
-  if (!docs.skill.includes("name: verify-")) {
-    throw new Error("ModelHitch skill is missing YAML name: verify-<slug>.");
-  }
-  if (!docs.map.includes("Feature Map")) {
-    throw new Error("ModelHitch map is missing a Feature Map heading.");
-  }
-  return { reasoning, docs };
+  const delimited = parseDelimited(raw);
+  if (delimited) return finish(delimited);
+
+  const fromJson = parseJsonDocs(raw);
+  if (fromJson) return finish(fromJson);
+
+  throw new ReasonParseError(
+    "ModelHitch reply was not parseable as Fieldguide markers or JSON.",
+    snippet(raw),
+  );
 }
 
 export async function reasonDocs(
@@ -122,11 +148,29 @@ export async function reasonDocs(
   hitch: HitchChat,
 ): Promise<ReasonedDocs> {
   const user = buildReasonPrompt(model, sourceExcerpts(sources));
-  const raw = await hitch.complete([
-    { role: "system", content: SYSTEM_PROMPT },
-    { role: "user", content: user },
-  ]);
-  return parseReasonedDocs(raw);
+  const firstMessages = [
+    { role: "system" as const, content: SYSTEM_PROMPT },
+    { role: "user" as const, content: user },
+  ];
+  const first = await hitch.complete(firstMessages);
+  try {
+    return parseReasonedDocs(first);
+  } catch (error) {
+    const second = await hitch.complete([
+      ...firstMessages,
+      { role: "assistant", content: first },
+      { role: "user", content: RETRY_PROMPT },
+    ]);
+    try {
+      return parseReasonedDocs(second);
+    } catch {
+      const preview = error instanceof ReasonParseError ? error.preview : snippet(first);
+      throw new ReasonParseError(
+        "ModelHitch did not return parseable docs after a retry. Try a stronger model, or pass --no-llm for inventory templates.",
+        preview,
+      );
+    }
+  }
 }
 
 export function bodyForKind(kind: DocKind, reasoned: ReasonedDocs | null, fallback: string): string {
@@ -144,19 +188,76 @@ export function bodyForKind(kind: DocKind, reasoned: ReasonedDocs | null, fallba
   }
 }
 
-function extractJsonObject(raw: string): string {
+function parseDelimited(raw: string): ReasonedDocs | null {
+  const reasoning = section(raw, "REASONING");
+  const docs: Partial<Record<DocKind, string>> = {
+    readme: section(raw, "README"),
+    map: section(raw, "MAP"),
+    agent: section(raw, "AGENT"),
+    skill: section(raw, "SKILL"),
+  };
+  if (!docs.readme || !docs.map || !docs.agent || !docs.skill) return null;
+  return { reasoning: reasoning ?? "", docs };
+}
+
+function section(raw: string, name: string): string | undefined {
+  const re = new RegExp(`<<<${name}>>>\\s*([\\s\\S]*?)(?=<<<[A-Z]+>>>|$)`, "i");
+  const match = raw.match(re);
+  const value = match?.[1]?.trim();
+  return value || undefined;
+}
+
+function parseJsonDocs(raw: string): ReasonedDocs | null {
+  const json = extractJsonObject(raw);
+  if (!json) return null;
+  let parsed: Record<string, unknown>;
+  try {
+    parsed = JSON.parse(json) as Record<string, unknown>;
+  } catch {
+    return null;
+  }
+  const docs: Partial<Record<DocKind, string>> = {};
+  for (const kind of DOC_KINDS) {
+    const value = parsed[kind];
+    if (typeof value === "string" && value.trim()) docs[kind] = value;
+  }
+  if (!docs.readme || !docs.map || !docs.agent || !docs.skill) return null;
+  const reasoning = typeof parsed.reasoning === "string" ? parsed.reasoning.trim() : "";
+  return { reasoning, docs };
+}
+
+function extractJsonObject(raw: string): string | null {
   const fenced = raw.match(/```(?:json)?\s*([\s\S]*?)```/i);
   const candidate = fenced?.[1]?.trim() ?? raw.trim();
   const start = candidate.indexOf("{");
   const end = candidate.lastIndexOf("}");
-  if (start < 0 || end <= start) {
-    throw new Error("ModelHitch did not return a JSON object.");
-  }
+  if (start < 0 || end <= start) return null;
   return candidate.slice(start, end + 1);
+}
+
+function finish(parsed: ReasonedDocs): ReasonedDocs {
+  const docs: Partial<Record<DocKind, string>> = {};
+  for (const kind of DOC_KINDS) {
+    const value = parsed.docs[kind];
+    if (value) docs[kind] = normalizeDoc(kind, value);
+  }
+  if (!docs.map || !docs.agent || !docs.skill || !docs.readme) {
+    throw new ReasonParseError("Parsed docs are missing readme, map, agent, or skill.", "");
+  }
+  if (!docs.skill.includes("name: verify-")) {
+    throw new ReasonParseError("Skill is missing YAML name: verify-<slug>.", snippet(docs.skill));
+  }
+  if (!docs.map.includes("Feature Map")) {
+    throw new ReasonParseError("Map is missing a Feature Map heading.", snippet(docs.map));
+  }
+  return { reasoning: parsed.reasoning, docs };
 }
 
 function normalizeDoc(kind: DocKind, value: string): string {
   let text = value.trim();
+  if (text.startsWith("```") && text.endsWith("```")) {
+    text = text.replace(/^```[a-z]*\n?/i, "").replace(/\n?```$/, "").trim();
+  }
   switch (kind) {
     case "readme":
       if (!text.includes(README_MARKER)) text = `${README_MARKER}\n${text}`;
@@ -172,4 +273,8 @@ function normalizeDoc(kind: DocKind, value: string): string {
       return _never;
     }
   }
+}
+
+function snippet(raw: string): string {
+  return raw.replace(/\s+/g, " ").trim().slice(0, 480);
 }
