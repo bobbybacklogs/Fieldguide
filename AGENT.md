@@ -30,22 +30,23 @@ This is `npm run lint && npm run test && tsx scripts/verify-smoke.ts`.
 - `src/cli.ts` — Commander entry (`bin`: `fieldguide`).
 - `src/crawl.ts` — gitignore-aware walk + capped source reads.
 - `src/infer.ts` — stack, routes, env, integrations, verify plan, feature sections.
-- `src/hitch.ts` — ModelHitch client (config, local providers, mock). Does not force JSON mode; local models often ignore it.
+- `src/hitch.ts` — ModelHitch client. Prefers a running bridge (`/healthz`, `modelhitch/auto`); otherwise uses the library + `~/.modelhitch/config.json` and its policy/intents plan when valid. Does not force JSON mode; local models often ignore it.
 - `src/reason.ts` — markdown inventory (not JSON), combined markers, then one file per hitch call; templates fill gaps.
 - `src/report.ts` — boxed CLI tables.
 - `src/generate.ts` — render + write orchestration.
 - `src/docs-readme-agent.ts` / `src/docs-map-skill.ts` — inventory templates (`--no-llm`).
 - `src/index.ts` — programmatic API (`analyze`, `generateDocs`).
 - `test/generate.test.ts` / `test/reason.test.ts` — fixtures, skip README, stubbed hitch.
-- `scripts/verify-smoke.ts` — temp-dir generate with `llm: false`.
+- `test/hitch.test.ts` — bridge URL/route helpers, injected-fetch bridge path, direct fallback, config plan note.
+- `scripts/verify-smoke.ts` — temp-dir generate with `llm: false`, plus the ModelHitch dependency floor.
 
 ## Stack
 
-TypeScript, Node 18+, Commander, `ignore`, picocolors, **modelhitch**. Build is `tsc` → `dist/`. Tests run with `tsx --test`.
+TypeScript, Node 18+, Commander, `ignore`, picocolors, **modelhitch ^2.10.0**. Build is `tsc` → `dist/`. Tests run with `tsx --test`.
 
 ## Environment
 
-Default verify does **not** call ModelHitch and does not need keys. Live `fieldguide` reads `~/.modelhitch/config.json` (or `MODELHITCH_HOME`) and optional `FIELDGUIDE_PROVIDER` / `FIELDGUIDE_MODEL`. Local providers (`ollama`, `lmstudio`, …) need no API key. Hosted providers use ModelHitch BYOK.
+Default verify does **not** call ModelHitch and does not need keys. Live `fieldguide` probes for a ModelHitch bridge at `MODELHITCH_BRIDGE_URL`, else `http://127.0.0.1:$MODELHITCH_PORT` (default `http://127.0.0.1:3939`), and routes `modelhitch/auto` through it when reachable. Otherwise it reads `~/.modelhitch/config.json` (or `MODELHITCH_HOME`) and optional `FIELDGUIDE_PROVIDER` / `FIELDGUIDE_MODEL`. `--bridge <url>` forces a bridge, `--direct` skips it, and explicit `--provider` / `--model` pins a direct lane. Local providers (`ollama`, `lmstudio`, …) need no API key. Hosted providers use ModelHitch BYOK. Fieldguide never starts or stops a bridge.
 
 ## Commands
 
@@ -60,13 +61,14 @@ Default verify does **not** call ModelHitch and does not need keys. Live `fieldg
 ## Do not claim
 
 - That Fieldguide executes the target application or its tests.
-- That default `npm run verify` calls a live ModelHitch lane.
+- That default `npm run verify` calls a live ModelHitch lane or a live bridge. Tests inject `complete`, `mock`, or `fetch`.
+- That `--bridge` is required, or that Fieldguide starts/stops a bridge for you.
 - That a handmade README is overwritten without `--force` or a `<!-- fieldguide:readme -->` marker.
 - That live vendor integrations in a *target* repo are proven by generating docs.
 - That `--no-llm` output is a reasoned architecture review. It is inventory templates.
 
 ## Extending the project
 
-- Keep the default verify path free of secrets and network.
+- Keep the default verify path free of secrets and network. Inject `fetchImpl` or a stub `chat` for ModelHitch behavior tests.
 - New user-facing CLI flags need a Feature Map row and a test or smoke assertion.
 - Generators must stay honest: Gap and Unverified (env-gated) are features, not failures.

@@ -121,6 +121,11 @@ export interface GenerateOptions {
   llm?: boolean;
   provider?: string;
   model?: string;
+  /**
+   * ModelHitch bridge URL to force, or `false` to use the library directly.
+   * Omitted means "auto": use a reachable local bridge, else the library.
+   */
+  bridge?: string | false;
   chat?: HitchChat;
   onProgress?: (event: { step: "crawl" | "infer" | "reason" | "write"; detail?: string }) => void;
 }

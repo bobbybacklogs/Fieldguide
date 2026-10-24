@@ -48,6 +48,16 @@ try {
   assert.match(readme, /<!-- fieldguide:readme -->/);
   assert.match(readme, /smoke-app/);
 
+  const pkg = JSON.parse(await readFile(new URL("../package.json", import.meta.url), "utf8")) as {
+    dependencies?: Record<string, string>;
+  };
+  const hitchRange = pkg.dependencies?.modelhitch ?? "";
+  const hitchMinor = /^\^?2\.(\d+)/.exec(hitchRange)?.[1];
+  assert.ok(
+    hitchMinor !== undefined && Number(hitchMinor) >= 10,
+    `package.json must depend on modelhitch >=2.10 (found "${hitchRange}")`,
+  );
+
   process.stdout.write("verify-smoke: ok\n");
 } finally {
   await rm(root, { recursive: true, force: true });

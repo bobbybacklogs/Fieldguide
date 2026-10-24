@@ -3,7 +3,7 @@ import { dirname, join } from "node:path";
 import { crawl } from "./crawl.js";
 import { renderAgent, renderReadme, readmeShouldWrite } from "./docs-readme-agent.js";
 import { renderFeatureMap, renderSkill } from "./docs-map-skill.js";
-import { createHitchChat } from "./hitch.js";
+import { createHitchChat, type HitchLane } from "./hitch.js";
 import { inferProject, outputPathFor } from "./infer.js";
 import { bodyForKind, reasonDocs, type ReasonedDocs } from "./reason.js";
 import type { DocKind, GenerateOptions, ProjectModel, WriteResult } from "./types.js";
@@ -35,7 +35,8 @@ export async function generateDocs(options: GenerateOptions): Promise<{
   model: ProjectModel;
   results: WriteResult[];
   reasoning?: string;
-  lane?: { provider: string; model: string };
+  lane?: HitchLane;
+  notes?: string[];
 }> {
   options.onProgress?.({ step: "crawl" });
   const crawled = await crawl(options.root);
@@ -43,7 +44,8 @@ export async function generateDocs(options: GenerateOptions): Promise<{
   const model = inferProject(options.root, crawled);
   const useLlm = options.llm !== false;
   let reasoned: ReasonedDocs | null = null;
-  let lane: { provider: string; model: string } | undefined;
+  let lane: HitchLane | undefined;
+  let notes: string[] | undefined;
 
   if (useLlm) {
     const hitch =
@@ -51,9 +53,11 @@ export async function generateDocs(options: GenerateOptions): Promise<{
       (await createHitchChat({
         provider: options.provider,
         model: options.model,
+        bridge: options.bridge,
       }));
     lane = hitch.lane;
-    options.onProgress?.({ step: "reason", detail: `${lane.provider} / ${lane.model}` });
+    notes = hitch.notes;
+    options.onProgress?.({ step: "reason", detail: laneDetail(lane) });
     reasoned = await reasonDocs(model, crawled.sources, hitch);
   }
 
@@ -98,10 +102,16 @@ export async function generateDocs(options: GenerateOptions): Promise<{
     });
   }
 
-  return { model, results, reasoning: reasoned?.reasoning, lane };
+  return { model, results, reasoning: reasoned?.reasoning, lane, notes };
 }
 
 export const ALL_KINDS: DocKind[] = ["readme", "map", "agent", "skill"];
+
+function laneDetail(lane: HitchLane): string {
+  return lane.transport === "bridge"
+    ? `bridge ${lane.endpoint ?? ""} · ${lane.model}`.trim()
+    : `${lane.provider} / ${lane.model}`;
+}
 
 export function parseKinds(raw: string | undefined): DocKind[] {
   if (!raw) return [...ALL_KINDS];

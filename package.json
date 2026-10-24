@@ -1,7 +1,7 @@
 {
   "name": "@genoventures-labs/fieldguide",
-  "version": "0.1.2",
-  "description": "CLI that crawls a project, reasons about it with ModelHitch, and writes README, feature map, agent instructions, and verify skills.",
+  "version": "0.2.0",
+  "description": "CLI that crawls a project, reasons about it with a ModelHitch bridge or library, and writes README, feature map, agent instructions, and verify skills.",
   "type": "module",
   "publishConfig": {
     "access": "public"
@@ -39,7 +39,9 @@
     "feature-map",
     "agents",
     "skills",
-    "verify"
+    "verify",
+    "modelhitch",
+    "bridge"
   ],
   "author": "Bobby Backlogs <bobbybacklogs@gmail.com>",
   "license": "MIT",
@@ -54,7 +56,7 @@
   "dependencies": {
     "commander": "^14.0.0",
     "ignore": "^7.0.4",
-    "modelhitch": "^2.0.3",
+    "modelhitch": "^2.10.0",
     "picocolors": "^1.1.1"
   },
   "devDependencies": {

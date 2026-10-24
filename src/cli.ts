@@ -6,6 +6,7 @@ import pc from "picocolors";
 import { analyze, generateDocs, parseKinds } from "./generate.js";
 import { ReasonParseError } from "./reason.js";
 import { asciiTable, banner, clip, kvTable, previewBlock, statusLabel } from "./report.js";
+import type { HitchLane } from "./hitch.js";
 import type { DocKind, WriteResult } from "./types.js";
 
 const pkg = createRequire(import.meta.url)("../package.json") as { version: string };
@@ -22,8 +23,10 @@ program
   .option("--only <kinds>", "comma list: readme,map,agent,skill")
   .option("--json", "print the inferred model as JSON (no ModelHitch call)", false)
   .option("--no-llm", "skip ModelHitch and write inventory templates only")
-  .option("--provider <id>", "ModelHitch provider (default: config, else ollama)")
+  .option("--provider <id>", "ModelHitch provider (direct mode; a bridge route prefix with --model)")
   .option("--model <id>", "ModelHitch model id")
+  .option("--bridge <url>", "force a running ModelHitch bridge instead of auto-detecting one")
+  .option("--direct", "skip the bridge; use the ModelHitch library and ~/.modelhitch/config.json", false)
   .action(async (
     dir: string,
     opts: {
@@ -34,6 +37,8 @@ program
       llm?: boolean;
       provider?: string;
       model?: string;
+      bridge?: string;
+      direct?: boolean;
     },
   ) => {
     const root = resolve(dir);
@@ -54,7 +59,7 @@ program
         ["Write", "…"],
       ];
 
-      const { model, results, reasoning, lane } = await generateDocs({
+      const { model, results, reasoning, lane, notes } = await generateDocs({
         root,
         dryRun: opts.dryRun,
         force: opts.force,
@@ -62,6 +67,7 @@ program
         llm,
         provider: opts.provider,
         model: opts.model,
+        bridge: opts.direct ? false : opts.bridge,
         onProgress: (event) => {
           switch (event.step) {
             case "crawl":
@@ -86,7 +92,7 @@ program
       });
 
       steps[1] = ["Infer", `${model.displayName} · ${model.stack.map((layer) => layer.label).join(" · ") || "unknown stack"}`];
-      if (lane) steps[2] = ["Reason", `${lane.provider} / ${lane.model}`];
+      if (lane) steps[2] = ["Reason", laneDetail(lane)];
       else steps[2] = ["Reason", "inventory templates (--no-llm)"];
       const wrote = results.filter((item) => item.status === "wrote").length;
       const skipped = results.filter((item) => item.status === "skipped").length;
@@ -97,11 +103,14 @@ program
           ["Project", model.displayName],
           ["Package", model.packageName ?? "—"],
           ["Root", root],
-          ["Hitch", lane ? `${lane.provider} / ${lane.model}` : "off"],
+          ["Hitch", lane ? laneDetail(lane) : "off"],
         ])}\n\n`,
       );
       process.stderr.write(`${asciiTable(["Step", "Detail"], steps, [12, 64])}\n\n`);
       process.stderr.write(`${fileTable(results)}\n`);
+      for (const note of notes ?? []) {
+        process.stderr.write(`  ${pc.dim(note)}\n`);
+      }
 
       if (reasoning) {
         process.stderr.write(`\n${previewBlock("Reasoning", reasoning)}\n`);
@@ -130,6 +139,13 @@ function fileTable(results: WriteResult[]): string {
     return [result.rel, statusLabel(result.status), note];
   });
   return asciiTable(["File", "Status", "Notes"], rows, [42, 10, 36]);
+}
+
+function laneDetail(lane: HitchLane): string {
+  if (lane.transport === "bridge") {
+    return `bridge ${lane.endpoint ?? ""} · ${lane.model}`.trim();
+  }
+  return `${lane.provider} / ${lane.model}`;
 }
 
 function kindLabel(kind: DocKind): string {

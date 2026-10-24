@@ -5,7 +5,7 @@ description: "use this when verifying Fieldguide still matches its Feature Map"
 
 # Verify Fieldguide
 
-Use this skill to prove the checkout still matches [docs/FEATURE_MAP.md](../../../docs/FEATURE_MAP.md). Do not treat README marketing copy as a live npm publish or a live ModelHitch generation. Do not call npm publish, the GitHub API, or a live model lane unless the user explicitly asked.
+Use this skill to prove the checkout still matches [docs/FEATURE_MAP.md](../../../docs/FEATURE_MAP.md). Do not treat README marketing copy as a live npm publish, a live ModelHitch generation, or a live bridge call. Do not call npm publish, the GitHub API, a live model lane, or a live bridge unless the user explicitly asked.
 
 Default path: **no secrets**. Expected exit: **0** on a clean checkout after `npm install`.
 
@@ -26,14 +26,14 @@ Run the three stages separately only when isolating a failure. Do not skip `lint
 | Step | Command | Expected exit | What it proves | Feature Map claims |
 | --- | --- | --- | --- | --- |
 | Lint | `npm run lint` (`tsc --noEmit`) | 0 | Typecheck of `src/` without emit. | Health / runtime: lint script; typecheck succeeds without secret env. |
-| Tests | `npm run test` (`tsx --test test/*.test.ts`) | 0 | Infer + generate against an Express fixture; README skip without `--force`. | CLI generate; README marker; routes/env inference. |
-| Smoke | `tsx scripts/verify-smoke.ts` | 0 | Writes all four artifacts for a temp CLI fixture and asserts headings, skill frontmatter, and the README marker. | CLI; Feature Map; verify skill; AGENT.md. |
+| Tests | `npm run test` (`tsx --test test/*.test.ts`) | 0 | Infer + generate against an Express fixture; README skip without `--force`; bridge-first/direct-fallback routing with injected fetch. | CLI generate; README marker; routes/env inference; ModelHitch integration. |
+| Smoke | `tsx scripts/verify-smoke.ts` | 0 | Writes all four artifacts for a temp CLI fixture, asserts headings, skill frontmatter, README marker, and the ModelHitch dependency floor. | CLI; Feature Map; verify skill; AGENT.md; ModelHitch integration. |
 
 If `node_modules` is missing: `npm install` (this repo expects a `package-lock.json` for CI `npm ci`). Then re-run `npm run verify`.
 
 ## Smoke coverage
 
-`scripts/verify-smoke.ts` is deterministic. It must not hit the network. It creates a temp project, runs `generateDocs` with `llm: false`, then deletes the temp dir.
+`scripts/verify-smoke.ts` is deterministic. It must not hit the network. It creates a temp project, runs `generateDocs` with `llm: false`, asserts the ModelHitch dependency floor, then deletes the temp dir.
 
 | Check | Proves | Map section |
 | --- | --- | --- |
@@ -45,9 +45,11 @@ If `node_modules` is missing: `npm install` (this repo expects a `package-lock.j
 | Skill YAML `name: verify-<slug>` and relative Feature Map link | Skill contract. | Verify skill |
 | Fixture Express routes `/api/health` and env `TIDE_API_KEY` appear in the map | Source inference. | Crawl / infer |
 | Markdown mentioning `initializeApp` does not invent a Firebase integration | Product-source filtering. | Crawl / infer |
-| Injected ModelHitch JSON or `<<<MARKER>>>` docs write reasoned README/map | Reason path without a live lane. | ModelHitch |
-| Prose first reply is retried once | Marker retry. | ModelHitch |
-| `createHitchChat({ mock: true })` echoes without a key | Mock provider. | ModelHitch |
+| `package.json` depends on `modelhitch` `^2.10.0` | Current ModelHitch release line. | ModelHitch integration |
+| Injected ModelHitch JSON or `<<<MARKER>>>` docs write reasoned README/map | Reason path without a live lane. | ModelHitch integration |
+| Prose first reply is retried once | Marker retry. | ModelHitch integration |
+| `createHitchChat({ mock: true })` echoes without a key | Mock provider. | ModelHitch integration |
+| Injected-fetch `/healthz` + `/v1/chat/completions` drive `modelhitch/auto`; a dead probe falls back to the library config; `--bridge` fails loudly when unreachable | Bridge-first routing without a live bridge. | ModelHitch integration |
 | Typecheck + tests succeed without secret env | Health. | Health / runtime |
 
 ## Out of default scope (env-gated)
@@ -56,7 +58,8 @@ These Feature Map rows stay **Unverified (env-gated)** or **Gap** after a green 
 
 - Publishing `@genoventures-labs/fieldguide` to npm.
 - GitHub Actions actually running on `main` from this machine.
-- A live ModelHitch lane (Ollama, LM Studio, gateway) during `npm run verify`.
+- A live ModelHitch lane (Ollama, LM Studio, gateway) or a live bridge during `npm run verify`.
+- Starting/stopping/configuring a ModelHitch bridge. Fieldguide only probes `/healthz`; it never manages the daemon.
 - Executing a *target* project's tests, servers, or live vendor APIs.
 - Overwriting a handmade README without `--force`.
 
@@ -70,4 +73,4 @@ Do not run UI e2e as part of this skill. Do not weaken docs to hide gaps (no mod
 
 ## Cleanup
 
-Smoke uses `fs.mkdtemp` and `fs.rm` in `finally`. If a run is interrupted, delete leftover `os.tmpdir()` folders named `fieldguide-smoke-*`.
+Smoke uses `fs.mkdtemp` and `fs.rm` in `finally`. If a run is interrupted, delete leftover `os.tmpdir()` folders named `fieldguide-smoke-*`, `fieldguide-hitch-*`, `fieldguide-plan-*`, or `fieldguide-retry-*`.
